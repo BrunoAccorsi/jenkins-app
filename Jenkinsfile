@@ -23,25 +23,6 @@ pipeline {
                 '''
             }
         }
-        stage('Deploy') {
-           agent {
-                docker {
-                    image 'node:22.14.0-alpine'
-                    reuseNode true
-                }
-            }
-            steps {
-                sh '''
-                echo "Deploying to production server..."
-                npm install netlify-cli
-                node_modules/.bin/netlify --version
-                echo "Deploying to Netlify... Site ID: $NETLIFY_SITE_ID"
-                node_modules/.bin/netlify status
-                node_modules/.bin/netlify deploy --prod --dir=build
-                '''
-            }
-        }
-
         stage('Test') {
             agent {
                 docker {
@@ -54,6 +35,26 @@ pipeline {
                 test -f build/index.html
                 npm test
                 '''
+            }
+        }
+        stage('Deploy to AWS') {
+           agent {
+                docker {
+                    image 'amazon/aws-cli'
+                    reuseNode true
+                    args '-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=""'
+                }
+            }
+            environment {
+                AWS_S3_BUCKET = 'temp-03-29-2025'
+            }
+            steps{
+                withCredentials([usernamePassword(credentialsId: 'AWS-s3-user', passwordVariable: 'AWS_SECRET_ACCESS_KEY', usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
+                sh '''
+                   aws --version
+                   aws s3 sync build s3://$AWS_S3_BUCKET
+                '''
+                }
             }
         }
     }
